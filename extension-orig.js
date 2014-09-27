@@ -1,6 +1,7 @@
 const Signals = imports.signals;
 const DND = imports.ui.dnd;
 const Main = imports.ui.main;
+const Overview = imports.ui.overview;
 const Tweener = imports.ui.tweener;
 const Workspace = imports.ui.workspace;
 const WorkspacesView = imports.ui.workspacesView;
@@ -625,6 +626,9 @@ function enable() {
     originalFunctions['_isMyWindow'] = Workspace.Workspace.prototype['_isMyWindow'];
     Workspace.Workspace.prototype['_isMyWindow'] = function(actor) { return true; };
 
+    originalFunctions['_updateWindowPositions'] = Workspace.Workspace.prototype['_updateWindowPositions'];
+    Workspace.Workspace.prototype['_updateWindowPositions'] = _updateWindowPositions;
+
     originalWorkspacesView = WorkspacesView.WorkspacesView.prototype;
     WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView.prototype;
 
@@ -634,6 +638,7 @@ function enable() {
 function disable() {
     Workspace.Workspace.prototype['_onCloneSelected'] = originalFunctions['_onCloneSelected'];
     Workspace.Workspace.prototype['_isMyWindow'] = originalFunctions['_isMyWindow'];
+    Workspace.Workspace.prototype['_updateWindowPositions'] = originalFunctions['_updateWindowPositions'];
 
     WorkspacesView.WorkspacesView.prototype = originalWorkspacesView;
     Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();

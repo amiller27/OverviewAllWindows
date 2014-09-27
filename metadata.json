@@ -2,5 +2,6 @@
 	"shell-version": ["3.10"],
 	"uuid": "OverviewAllWindows@amiller27",
 	"name": "Overview All Windows",
-	"description": "Shows windows from all workspaces in the overview."
+	"description": "Shows windows from all workspaces in the overview.",
+	"url": "http://github.com/amiller27/OverviewAllWindows"
 }

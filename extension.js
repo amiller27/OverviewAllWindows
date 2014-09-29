@@ -1,3 +1,4 @@
+const Mainloop = imports.mainloop;
 const Signals = imports.signals;
 const DND = imports.ui.dnd;
 const Main = imports.ui.main;

@@ -12,6 +12,7 @@ const ShellVersion = imports.misc.config.PACKAGE_VERSION.split(".").map(function
 let currentExtension = imports.misc.extensionUtils.getCurrentExtension();
 const UnifiedWorkspacesView10 = currentExtension.imports.unifiedWorkspacesView10;
 const UnifiedWorkspacesView12 = currentExtension.imports.unifiedWorkspacesView12;
+const UnifiedWorkspacesView14 = currentExtension.imports.unifiedWorkspacesView14;
 
 let _updateWindowPositions = function(flags) {
     if (this._currentLayout == null) {
@@ -176,13 +177,15 @@ function enable() {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView10.UnifiedWorkspacesView.prototype;
     } else if (ShellVersion[1] === 12) {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView12.UnifiedWorkspacesView.prototype;
+    } else if (ShellVersion[1] === 14) {
+        WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView14.UnifiedWorkspacesView.prototype;
     }
 
     if (ShellVersion[1] === 4) {
         Main.overview._workspacesDisplay._updateWorkspacesViews();
     } else if (ShellVersion[1] === 8) {
         Main.overview._viewSelector._workspacesDisplay._updateWorkspacesViews();
-    } else if (ShellVersion[1] === 10 || ShellVersion[1] === 12) {
+    } else if (ShellVersion[1] === 10 || ShellVersion[1] === 12 || ShellVersion[1] === 14) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
     }
 }
@@ -198,7 +201,7 @@ function disable() {
         Main.overview._workspacesDisplay._updateWorkspacesViews();
     } else if (ShellVersion[1] === 8) {
         Main.overview._viewSelector._workspacesDisplay._updateWorkspacesViews();
-    } else if (ShellVersion[1] === 10 || ShellVersion[1] === 12) {
+    } else if (ShellVersion[1] === 10 || ShellVersion[1] === 12 || ShellVersion[1] === 14) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
     }
 }

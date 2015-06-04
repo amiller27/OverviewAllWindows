@@ -20,6 +20,10 @@ let _updateWindowPositions = function(flags) {
         return;
     }
 
+    if (ShellVersion[1] === 14 && (this.leavingOverview || this._animatingWindowsFade)) {
+        return;
+    }
+
     let initialPositioning = flags & Workspace.WindowPositionFlags.INITIAL;
     let animate = flags & Workspace.WindowPositionFlags.ANIMATE;
 
@@ -62,7 +66,10 @@ let _updateWindowPositions = function(flags) {
         }
 
         if (animate) {
-            if (!metaWindow.showing_on_its_workspace() || metaWindow.get_workspace() != currentWorkspace) {
+            if (!metaWindow.showing_on_its_workspace() ||
+                metaWindow.get_workspace() != currentWorkspace ||
+                metaWindow.get_monitor() != this.monitorIndex) {
+
                 /* Hidden windows should fade in and grow
                  * therefore we need to resize them now so they
                  * can be scaled up later */
@@ -81,7 +88,12 @@ let _updateWindowPositions = function(flags) {
                                  });
             }
 
-            this._animateClone(clone, overlay, x, y, scale, initialPositioning);
+            if (ShellVersion[1] === 10 || ShellVersion[1] === 12) {
+                this._animateClone(clone, overlay, x, y, scale, initialPositioning);
+            } else if (ShellVersion[1] === 14) {
+                this._animateClone(clone, overlay, x, y, scale);
+            }
+
         } else {
             // cancel any active tweens (otherwise they might override our changes)
             Tweener.removeTweens(clone.actor);
@@ -93,6 +105,71 @@ let _updateWindowPositions = function(flags) {
         }
     }
 };
+
+let fadeToOverview = function() {
+    // We don't want to reposition windows while animating in this way.
+    this._animatingWindowsFade = true;
+
+    // this is the same _overviewShownId that is handled by the default Workspace class
+    // handling of the disconnection of this listener is left to the default behavior
+    this._overviewShownId = Main.overview.connect('shown', Lang.bind(this,
+                                                                     this._doneShowingOverview));
+    if (this._windows.length == 0)
+        return;
+
+    let nTimeSlots = Math.min(Workspace.WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1, this._windows.length - 1);
+    let windowBaseTime = Overview.ANIMATION_TIME / nTimeSlots;
+
+    let topIndex = this._windows.length - 1;
+    for (let i = 0; i < this._windows.length; i++) {
+        let fromTop = topIndex - i;
+        let time;
+        if (fromTop < nTimeSlots) // animate top-most windows gradually
+            time = windowBaseTime * (nTimeSlots - fromTop);
+        else
+            time = windowBaseTime;
+
+        this._windows[i].actor.opacity = 255;
+        this._fadeWindow(i, time, 0);
+    }
+}
+
+let fadeFromOverview = function() {
+    this.leavingOverview = true;
+
+    // this is the same _overviewHiddenId that is handled by the default Workspace class
+    // handling of the disconnection of this listener is left to the default behavior
+    this._overviewHiddenId = Main.overview.connect('hidden', Lang.bind(this,
+                                                                       this._doneLeavingOverview));
+    if (this._windows.length == 0)
+        return;
+
+    for (let i = 0; i < this._windows.length; i++) {
+        let clone = this._windows[i];
+        Tweener.removeTweens(clone.actor);
+    }
+
+    if (this._repositionWindowsId > 0) {
+        Mainloop.source_remove(this._repositionWindowsId);
+        this._repositionWindowsId = 0;
+    }
+
+    let nTimeSlots = Math.min(Workspace.WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1, this._windows.length - 1);
+    let windowBaseTime = Overview.ANIMATION_TIME / nTimeSlots;
+
+    let topIndex = this._windows.length - 1;
+    for (let i = 0; i < this._windows.length; i++) {
+        let fromTop = topIndex - i;
+        let time;
+        if (fromTop < nTimeSlots) // animate top-most windows gradually
+            time = windowBaseTime * (fromTop + 1);
+        else
+            time = windowBaseTime * nTimeSlots;
+
+        this._windows[i].actor.opacity = 0;
+        this._fadeWindow(i, time, 255);
+    }
+}
 
 // Animates the return from Overview mode in Workspace.Workspace
 let zoomFromOverview = function() {
@@ -120,9 +197,12 @@ let zoomFromOverview = function() {
         if (overlay)
             overlay.hide();
 
-        if (clone.metaWindow.showing_on_its_workspace() && clone.metaWindow.get_workspace() == currentWorkspace) {
+        if (clone.metaWindow.showing_on_its_workspace() &&
+            clone.metaWindow.get_workspace() === currentWorkspace &&
+            clone.metaWindow.get_monitor() === this.monitorIndex) {
+            
             let origX, origY;
-            if (ShellVersion[1] === 12) {
+            if (ShellVersion[1] === 12 || ShellVersion[1] === 14) {
                 [origX, origY] = clone.getOriginalPosition();
             } else {
                 origX = clone.origX;
@@ -161,16 +241,26 @@ function enable() {
     originalFunctions = {};
 
     originalFunctions['_onCloneSelected'] = Workspace.Workspace.prototype['_onCloneSelected'];
-    Workspace.Workspace.prototype['_onCloneSelected'] = function(clone, time) {Main.activateWindow(clone.metaWindow, time)};
+    Workspace.Workspace.prototype['_onCloneSelected'] = function(clone, time) {Main.activateWindow(clone.metaWindow, time, clone.metaWindow.get_workspace().index())};
 
     originalFunctions['_isMyWindow'] = Workspace.Workspace.prototype['_isMyWindow'];
-    Workspace.Workspace.prototype['_isMyWindow'] = function(actor) { return true; };
+    Workspace.Workspace.prototype['_isMyWindow'] = function(actor) {
+        return ShellVersion[1] < 12 || actor.metaWindow.get_monitor() == this.monitorIndex;
+    };
 
     originalFunctions['_updateWindowPositions'] = Workspace.Workspace.prototype['_updateWindowPositions'];
     Workspace.Workspace.prototype['_updateWindowPositions'] = _updateWindowPositions;
 
     originalFunctions['zoomFromOverview'] = Workspace.Workspace.prototype['zoomFromOverview'];
     Workspace.Workspace.prototype['zoomFromOverview'] = zoomFromOverview;
+
+    if (ShellVersion[1] === 14) {
+        originalFunctions['fadeFromOverview'] = Workspace.Workspace.prototype['fadeFromOverview'];
+        Workspace.Workspace.prototype['fadeFromOverview'] = fadeFromOverview;
+
+        originalFunctions['fadeToOverview'] = Workspace.Workspace.prototype['fadeToOverview'];
+        Workspace.Workspace.prototype['fadeToOverview'] = fadeToOverview;
+    }
 
     originalWorkspacesView = WorkspacesView.WorkspacesView.prototype;
     if (ShellVersion[1] === 10) {
@@ -191,10 +281,9 @@ function enable() {
 }
 
 function disable() {
-    Workspace.Workspace.prototype['_onCloneSelected'] = originalFunctions['_onCloneSelected'];
-    Workspace.Workspace.prototype['_isMyWindow'] = originalFunctions['_isMyWindow'];
-    Workspace.Workspace.prototype['_updateWindowPositions'] = originalFunctions['_updateWindowPositions'];
-    Workspace.Workspace.prototype['zoomFromOverview'] = originalFunctions['zoomFromOverview'];
+    for (let functionName in originalFunctions) {
+        Workspace.Workspace.prototype[functionName] = originalFunctions[functionName];
+    }
 
     WorkspacesView.WorkspacesView.prototype = originalWorkspacesView;
     if (ShellVersion[1] === 4) {

@@ -34,7 +34,7 @@ const UnifiedWorkspacesView = new Lang.Class({
                                                     page_increment: 1,
                                                     page_size: 1,
                                                     step_increment: 0,
-                                                    upper: 1 });
+                                                    upper: 0 });
         this.scrollAdjustment.connect('notify::value',
                                       Lang.bind(this, this._onScroll));
 

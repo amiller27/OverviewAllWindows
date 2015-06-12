@@ -26,8 +26,6 @@ const UnifiedWorkspacesView = new Lang.Class({
         this._scrolling = false; // swipe-scrolling
         this._animatingScroll = false; // programatically updating the adjustment
 
-        this._settings = new Gio.Settings({ schema_id: OVERRIDE_SCHEMA });
-
         let activeWorkspaceIndex = global.screen.get_active_workspace_index();
         this.scrollAdjustment = new St.Adjustment({ value: activeWorkspaceIndex,
                                                     lower: 0,

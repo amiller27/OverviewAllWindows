@@ -1,5 +1,5 @@
 {
-	"shell-version": ["3.10", "3.12", "3.14"],
+	"shell-version": ["3.10", "3.12", "3.14", "3.16"],
 	"uuid": "OverviewAllWindows@amiller27",
 	"name": "Overview All Windows",
 	"description": "Shows windows from all workspaces in the overview.",

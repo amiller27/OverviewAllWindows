@@ -20,7 +20,7 @@ let _updateWindowPositions = function(flags) {
         return;
     }
 
-    if (ShellVersion[1] === 14 && (this.leavingOverview || this._animatingWindowsFade)) {
+    if ((ShellVersion[1] >= 14) && (this.leavingOverview || this._animatingWindowsFade)) {
         return;
     }
 
@@ -90,7 +90,7 @@ let _updateWindowPositions = function(flags) {
 
             if (ShellVersion[1] === 10 || ShellVersion[1] === 12) {
                 this._animateClone(clone, overlay, x, y, scale, initialPositioning);
-            } else if (ShellVersion[1] === 14) {
+            } else if (ShellVersion[1] >= 14) {
                 this._animateClone(clone, overlay, x, y, scale);
             }
 
@@ -202,7 +202,7 @@ let zoomFromOverview = function() {
             clone.metaWindow.get_monitor() === this.monitorIndex) {
             
             let origX, origY;
-            if (ShellVersion[1] === 12 || ShellVersion[1] === 14) {
+            if (ShellVersion[1] >= 12) {
                 [origX, origY] = clone.getOriginalPosition();
             } else {
                 origX = clone.origX;
@@ -254,7 +254,7 @@ function enable() {
     originalFunctions['zoomFromOverview'] = Workspace.Workspace.prototype['zoomFromOverview'];
     Workspace.Workspace.prototype['zoomFromOverview'] = zoomFromOverview;
 
-    if (ShellVersion[1] === 14) {
+    if (ShellVersion[1] >= 14) {
         originalFunctions['fadeFromOverview'] = Workspace.Workspace.prototype['fadeFromOverview'];
         Workspace.Workspace.prototype['fadeFromOverview'] = fadeFromOverview;
 
@@ -267,7 +267,7 @@ function enable() {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView10.UnifiedWorkspacesView.prototype;
     } else if (ShellVersion[1] === 12) {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView12.UnifiedWorkspacesView.prototype;
-    } else if (ShellVersion[1] === 14) {
+    } else if (ShellVersion[1] >= 14) {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView14.UnifiedWorkspacesView.prototype;
     }
 
@@ -275,7 +275,7 @@ function enable() {
         Main.overview._workspacesDisplay._updateWorkspacesViews();
     } else if (ShellVersion[1] === 8) {
         Main.overview._viewSelector._workspacesDisplay._updateWorkspacesViews();
-    } else if (ShellVersion[1] === 10 || ShellVersion[1] === 12 || ShellVersion[1] === 14) {
+    } else if (ShellVersion[1] >= 10) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
     }
 }
@@ -290,7 +290,7 @@ function disable() {
         Main.overview._workspacesDisplay._updateWorkspacesViews();
     } else if (ShellVersion[1] === 8) {
         Main.overview._viewSelector._workspacesDisplay._updateWorkspacesViews();
-    } else if (ShellVersion[1] === 10 || ShellVersion[1] === 12 || ShellVersion[1] === 14) {
+    } else if (ShellVersion[1] >= 10) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
     }
 }

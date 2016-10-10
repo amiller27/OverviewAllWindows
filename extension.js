@@ -13,6 +13,7 @@ let currentExtension = imports.misc.extensionUtils.getCurrentExtension();
 const UnifiedWorkspacesView10 = currentExtension.imports.unifiedWorkspacesView10;
 const UnifiedWorkspacesView12 = currentExtension.imports.unifiedWorkspacesView12;
 const UnifiedWorkspacesView14 = currentExtension.imports.unifiedWorkspacesView14;
+const UnifiedWorkspacesView22 = currentExtension.imports.unifiedWorkspacesView22;
 
 let _updateWindowPositions = function(flags) {
     if (this._currentLayout == null) {
@@ -200,7 +201,7 @@ let zoomFromOverview = function() {
         if (clone.metaWindow.showing_on_its_workspace() &&
             clone.metaWindow.get_workspace() === currentWorkspace &&
             clone.metaWindow.get_monitor() === this.monitorIndex) {
-            
+
             let origX, origY;
             if (ShellVersion[1] >= 12) {
                 [origX, origY] = clone.getOriginalPosition();
@@ -208,7 +209,7 @@ let zoomFromOverview = function() {
                 origX = clone.origX;
                 origY = clone.origY;
             }
-            
+
             Tweener.addTween(clone.actor,
                              { x: origX,
                                y: origY,
@@ -267,8 +268,10 @@ function enable() {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView10.UnifiedWorkspacesView.prototype;
     } else if (ShellVersion[1] === 12) {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView12.UnifiedWorkspacesView.prototype;
-    } else if (ShellVersion[1] >= 14) {
+    } else if (ShellVersion[1] >= 14 && ShellVersion[1] <= 20) {
         WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView14.UnifiedWorkspacesView.prototype;
+    } else if (ShellVersion[1] >= 22) {
+        WorkspacesView.WorkspacesView.prototype = UnifiedWorkspacesView22.UnifiedWorkspacesView.prototype;
     }
 
     if (ShellVersion[1] === 4) {

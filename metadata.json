@@ -3,5 +3,6 @@
 	"uuid": "OverviewAllWindows@amiller27",
 	"name": "Overview All Windows",
 	"description": "Shows windows from all workspaces in the overview.",
+	"settings-schema": "org.gnome.shell.extensions.overview-all-windows",
 	"url": "http://github.com/amiller27/OverviewAllWindows"
 }

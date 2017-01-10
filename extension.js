@@ -4,12 +4,17 @@ const Overview = imports.ui.overview;
 const Tweener = imports.ui.tweener;
 const Workspace = imports.ui.workspace;
 const WorkspacesView = imports.ui.workspacesView;
+const Shell = imports.gi.Shell;
+const Meta = imports.gi.Meta;
 
 const Lang = imports.lang;
 
 const ShellVersion = imports.misc.config.PACKAGE_VERSION.split(".").map(function (x) { return + x; });
 
 let currentExtension = imports.misc.extensionUtils.getCurrentExtension();
+const Convenience = currentExtension.imports.convenience;
+const config = currentExtension.imports.config;
+
 const UnifiedWorkspacesView10 = currentExtension.imports.unifiedWorkspacesView10;
 const UnifiedWorkspacesView12 = currentExtension.imports.unifiedWorkspacesView12;
 const UnifiedWorkspacesView14 = currentExtension.imports.unifiedWorkspacesView14;
@@ -233,12 +238,48 @@ let zoomFromOverview = function() {
 };
 
 let originalFunctions, originalWorkspacesView;
+let is_setup = false;
+let is_setting_up = false;
+let settings = {};
+let _overviewHiddenId;
 
 function init() {
-    //nothing here for now
+    settings = Convenience.getSettings();
+}
+
+
+function _addKeybinding(name, handler) {
+    if (Main.wm.addKeybinding) {
+        let ModeType = Shell.hasOwnProperty('ActionMode') ? Shell.ActionMode : Shell.KeyBindingMode;
+        Main.wm.addKeybinding(name, this.settings, Meta.KeyBindingFlags.NONE, ModeType.NORMAL | ModeType.OVERVIEW, handler);
+    } else {
+        global.display.add_keybinding(name, this.settings, Meta.KeyBindingFlags.NONE, handler);
+    }
+}
+
+function _removeKeybindings(name) {
+    if (Main.wm.removeKeybinding) {
+        Main.wm.removeKeybinding(name);
+    }
+    else {
+        global.display.remove_keybinding(name);
+    }
 }
 
 function enable() {
+    _addKeybinding('toggle-unified-overview', toggleUnifiedOverview);
+    if (this.settings[config.SETTINGS_REPLACE_OVERVIEW]) {
+        setUp();
+    }
+}
+
+function disable() {
+    _removeKeybindings('toggle-unified-overview');
+}
+
+function setUp() {
+    if (is_setup||is_setting_up) return;
+    is_setting_up = true;
     originalFunctions = {};
 
     originalFunctions['_onCloneSelected'] = Workspace.Workspace.prototype['_onCloneSelected'];
@@ -281,9 +322,13 @@ function enable() {
     } else if (ShellVersion[1] >= 10) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
     }
+    is_setup = true;
+    is_setting_up = false;
 }
 
-function disable() {
+function destroy() {
+    if (!is_setup||is_setting_up) return;
+    is_setting_up = true;
     for (let functionName in originalFunctions) {
         Workspace.Workspace.prototype[functionName] = originalFunctions[functionName];
     }
@@ -295,5 +340,23 @@ function disable() {
         Main.overview._viewSelector._workspacesDisplay._updateWorkspacesViews();
     } else if (ShellVersion[1] >= 10) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
+    }
+    if (_overviewHiddenId) {
+      Main.overview.disconnect(_overviewHiddenId);
+    }
+    is_setup = false;
+    is_setting_up = false;
+}
+
+
+function toggleUnifiedOverview() {
+    if (Main.overview.visible) {
+        Main.overview.hide();
+    } else {
+        setUp();
+        Main.overview.show();
+        if (!settings[config.SETTINGS_REPLACE_OVERVIEW]) {
+            _overviewHiddenId = Main.overview.connect('hidden', destroy);
+        }
     }
 }

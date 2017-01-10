@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-shell-extensions">
+  <schema path="/org/gnome/shell/extensions/overview-all-windows/" id="org.gnome.shell.extensions.overview-all-windows">
+    <key name="replace-overview" type="b">
+      <default>true</default>
+      <summary><![CDATA[['Replace default overview? (Otherwise <Super><Ctl>tab activates the modified overview)']]]></summary>
+      <description>
+        Do you want to replace the overview with one showing all windows?
+      </description>
+    </key>
+    <key name="toggle-unified-overview" type="as">
+      <default><![CDATA[['<Super><Ctl>tab']]]></default>
+      <summary>Keybinding to open overview for all windows</summary>
+      <description>
+        Keybinding to open overview for all windows
+      </description>
+    </key>
+  </schema>
+</schemalist>

@@ -13,7 +13,7 @@ const ShellVersion = imports.misc.config.PACKAGE_VERSION.split(".").map(function
 
 let currentExtension = imports.misc.extensionUtils.getCurrentExtension();
 const Convenience = currentExtension.imports.convenience;
-const config = currentExtension.imports.config;
+const Prefs = currentExtension.imports.prefs;
 
 const UnifiedWorkspacesView10 = currentExtension.imports.unifiedWorkspacesView10;
 const UnifiedWorkspacesView12 = currentExtension.imports.unifiedWorkspacesView12;
@@ -240,20 +240,19 @@ let zoomFromOverview = function() {
 let originalFunctions, originalWorkspacesView;
 let is_setup = false;
 let is_setting_up = false;
-let settings = {};
-let _overviewHiddenId;
+let settings = 0;
+let _overviewHiddenId = 0;
 
 function init() {
-    settings = Convenience.getSettings();
 }
 
 
 function _addKeybinding(name, handler) {
     if (Main.wm.addKeybinding) {
         let ModeType = Shell.hasOwnProperty('ActionMode') ? Shell.ActionMode : Shell.KeyBindingMode;
-        Main.wm.addKeybinding(name, this.settings, Meta.KeyBindingFlags.NONE, ModeType.NORMAL | ModeType.OVERVIEW, handler);
+        Main.wm.addKeybinding(name, settings, Meta.KeyBindingFlags.NONE, ModeType.NORMAL | ModeType.OVERVIEW, handler);
     } else {
-        global.display.add_keybinding(name, this.settings, Meta.KeyBindingFlags.NONE, handler);
+        global.display.add_keybinding(name, settings, Meta.KeyBindingFlags.NONE, handler);
     }
 }
 
@@ -266,15 +265,42 @@ function _removeKeybindings(name) {
     }
 }
 
-function enable() {
-    _addKeybinding('toggle-unified-overview', toggleUnifiedOverview);
-    if (this.settings[config.SETTINGS_REPLACE_OVERVIEW]) {
+let last_setting = 0;
+function checkSettings() {
+    let new_setting = settings.get_boolean(Prefs.SETTINGS_REPLACE_OVERVIEW);
+    if (new_setting === last_setting) {
+        return;
+    }
+
+    if (new_setting) {
+        while (keybindings.length) {
+            _removeKeybindings(keybindings.pop());
+        }
         setUp();
+    } else {
+        destroy();
+        keybindings.push('toggle-unified-overview');
+        _addKeybinding('toggle-unified-overview', toggleUnifiedOverview);
     }
 }
 
+let signals = [];
+let keybindings = [];
+function enable() {
+    settings = Convenience.getSettings();
+    signals.push(settings.connect('changed::' + Prefs.SETTINGS_REPLACE_OVERVIEW,
+                                  checkSettings));
+    checkSettings();
+}
+
 function disable() {
-    _removeKeybindings('toggle-unified-overview');
+    while (signals.length) {
+        settings.disconnect(signals.pop());
+    }
+
+    while (keybindings.length) {
+        _removeKeybindings(keybindings.pop());
+    }
 }
 
 function setUp() {
@@ -341,8 +367,9 @@ function destroy() {
     } else if (ShellVersion[1] >= 10) {
         Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
     }
-    if (_overviewHiddenId) {
-      Main.overview.disconnect(_overviewHiddenId);
+    if (_overviewHiddenId != 0) {
+        Main.overview.disconnect(_overviewHiddenId);
+        _overviewHiddenId = 0;
     }
     is_setup = false;
     is_setting_up = false;
@@ -355,8 +382,6 @@ function toggleUnifiedOverview() {
     } else {
         setUp();
         Main.overview.show();
-        if (!settings[config.SETTINGS_REPLACE_OVERVIEW]) {
-            _overviewHiddenId = Main.overview.connect('hidden', destroy);
-        }
+        _overviewHiddenId = Main.overview.connect('hidden', destroy);
     }
 }

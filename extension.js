@@ -1,3 +1,4 @@
+const GLib = imports.gi.GLib;
 const Mainloop = imports.mainloop;
 const Main = imports.ui.main;
 const Overview = imports.ui.overview;
@@ -19,6 +20,74 @@ const UnifiedWorkspacesView10 = currentExtension.imports.unifiedWorkspacesView10
 const UnifiedWorkspacesView12 = currentExtension.imports.unifiedWorkspacesView12;
 const UnifiedWorkspacesView14 = currentExtension.imports.unifiedWorkspacesView14;
 const UnifiedWorkspacesView22 = currentExtension.imports.unifiedWorkspacesView22;
+
+let _doAddWindow = function(metaWin) {
+    if (this.leavingOverview)
+        return;
+
+    let win = metaWin.get_compositor_private();
+
+    if (!win) {
+        // Newly-created windows are added to a workspace before
+        // the compositor finds out about them...
+        let id = Mainloop.idle_add(() => {
+            // only change: made this check monitor instead of workspace
+            if (this.actor &&
+                metaWin.get_compositor_private() &&
+                metaWin.get_monitor() == this.monitorIndex)
+                this._doAddWindow(metaWin);
+            return GLib.SOURCE_REMOVE;
+        });
+        GLib.Source.set_name_by_id(id, '[gnome-shell] this._doAddWindow');
+        return;
+    }
+
+    // We might have the window in our list already if it was on all workspaces and
+    // now was moved to this workspace
+    if (this._lookupIndex (metaWin) != -1)
+        return;
+
+    if (!this._isMyWindow(win))
+        return;
+
+    if (!this._isOverviewWindow(win)) {
+        if (metaWin.is_attached_dialog()) {
+            let parent = metaWin.get_transient_for();
+            while (parent.is_attached_dialog())
+                parent = metaWin.get_transient_for();
+
+            let idx = this._lookupIndex (parent);
+            if (idx < 0) {
+                // parent was not created yet, it will take care
+                // of the dialog when created
+                return;
+            }
+
+            let clone = this._windows[idx];
+            clone.addAttachedDialog(metaWin);
+        }
+
+        return;
+    }
+
+    let [clone, overlay] = this._addWindowClone(win, false);
+
+    if (win._overviewHint) {
+        let x = win._overviewHint.x - this.actor.x;
+        let y = win._overviewHint.y - this.actor.y;
+        let scale = win._overviewHint.scale;
+        delete win._overviewHint;
+
+        clone.slot = [x, y, clone.actor.width * scale, clone.actor.height * scale];
+        clone.positioned = true;
+        clone.actor.set_position (x, y);
+        clone.actor.set_scale (scale, scale);
+        clone.overlay.relayout(false);
+    }
+
+    this._currentLayout = null;
+    this._recalculateWindowPositions(Workspace.WindowPositionFlags.ANIMATE);
+};
 
 let _updateWindowPositions = function(flags) {
     if (this._currentLayout == null) {
@@ -321,6 +390,10 @@ function setUp() {
 
     originalFunctions['zoomFromOverview'] = Workspace.Workspace.prototype['zoomFromOverview'];
     Workspace.Workspace.prototype['zoomFromOverview'] = zoomFromOverview;
+
+    originalFunctions['_doAddWindow'] =
+        Workspace.Workspace.prototype['_doAddWindow'];
+    Workspace.Workspace.prototype['_doAddWindow'] = _doAddWindow;
 
     if (ShellVersion[1] >= 14) {
         originalFunctions['fadeFromOverview'] = Workspace.Workspace.prototype['fadeFromOverview'];

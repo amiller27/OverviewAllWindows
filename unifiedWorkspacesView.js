@@ -15,7 +15,7 @@ const Lang = imports.lang;
 const OVERRIDE_SCHEMA = WorkspacesView.OVERRIDE_SCHEMA;
 const WORKSPACE_SWITCH_TIME = WorkspacesView.WORKSPACE_SWITCH_TIME;
 
-const UnifiedWorkspacesView = new Lang.Class({
+var UnifiedWorkspacesView = new Lang.Class({
     Name: 'UnifiedWorkspacesView',
     Extends: WorkspacesView.WorkspacesViewBase,
 
@@ -32,7 +32,7 @@ const UnifiedWorkspacesView = new Lang.Class({
                                                     page_increment: 1,
                                                     page_size: 1,
                                                     step_increment: 0,
-                                                    upper: 0 });
+                                                    upper: global.screen.n_workspaces });
         this.scrollAdjustment.connect('notify::value',
                                       Lang.bind(this, this._onScroll));
 

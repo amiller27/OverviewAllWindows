@@ -318,10 +318,18 @@ function init() {
 
 function _addKeybinding(name, handler) {
     if (Main.wm.addKeybinding) {
-        let ModeType = Shell.hasOwnProperty('ActionMode') ? Shell.ActionMode : Shell.KeyBindingMode;
-        Main.wm.addKeybinding(name, settings, Meta.KeyBindingFlags.NONE, ModeType.NORMAL | ModeType.OVERVIEW, handler);
+        let ModeType = Shell.hasOwnProperty('ActionMode')
+                     ? Shell.ActionMode
+                     : Shell.KeyBindingMode;
+        Main.wm.addKeybinding(name,
+                              settings,
+                              Meta.KeyBindingFlags.NONE,
+                              ModeType.NORMAL | ModeType.OVERVIEW, handler);
     } else {
-        global.display.add_keybinding(name, settings, Meta.KeyBindingFlags.NONE, handler);
+        global.display.add_keybinding(name,
+                                      settings,
+                                      Meta.KeyBindingFlags.NONE,
+                                      handler);
     }
 }
 
@@ -377,18 +385,27 @@ function setUp() {
     is_setting_up = true;
     originalFunctions = {};
 
-    originalFunctions['_onCloneSelected'] = Workspace.Workspace.prototype['_onCloneSelected'];
-    Workspace.Workspace.prototype['_onCloneSelected'] = function(clone, time) {Main.activateWindow(clone.metaWindow, time, clone.metaWindow.get_workspace().index())};
+    originalFunctions['_onCloneSelected'] =
+        Workspace.Workspace.prototype['_onCloneSelected'];
+    Workspace.Workspace.prototype['_onCloneSelected'] = function(clone, time) {
+        Main.activateWindow(clone.metaWindow,
+                            time,
+                            clone.metaWindow.get_workspace().index());
+    };
 
-    originalFunctions['_isMyWindow'] = Workspace.Workspace.prototype['_isMyWindow'];
+    originalFunctions['_isMyWindow'] =
+        Workspace.Workspace.prototype['_isMyWindow'];
     Workspace.Workspace.prototype['_isMyWindow'] = function(actor) {
         return ShellVersion[1] < 12 || actor.metaWindow.get_monitor() == this.monitorIndex;
     };
 
-    originalFunctions['_updateWindowPositions'] = Workspace.Workspace.prototype['_updateWindowPositions'];
-    Workspace.Workspace.prototype['_updateWindowPositions'] = _updateWindowPositions;
+    originalFunctions['_updateWindowPositions'] =
+        Workspace.Workspace.prototype['_updateWindowPositions'];
+    Workspace.Workspace.prototype['_updateWindowPositions'] =
+        _updateWindowPositions;
 
-    originalFunctions['zoomFromOverview'] = Workspace.Workspace.prototype['zoomFromOverview'];
+    originalFunctions['zoomFromOverview'] =
+        Workspace.Workspace.prototype['zoomFromOverview'];
     Workspace.Workspace.prototype['zoomFromOverview'] = zoomFromOverview;
 
     originalFunctions['_doAddWindow'] =
@@ -429,7 +446,8 @@ function destroy() {
     if (!is_setup||is_setting_up) return;
     is_setting_up = true;
     for (let functionName in originalFunctions) {
-        Workspace.Workspace.prototype[functionName] = originalFunctions[functionName];
+        Workspace.Workspace.prototype[functionName] =
+            originalFunctions[functionName];
     }
 
     WorkspacesView.WorkspacesView.prototype = originalWorkspacesView;

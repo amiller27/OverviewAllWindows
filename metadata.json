@@ -1,8 +1,11 @@
 {
-	"shell-version": ["3.22", "3.24", "3.26", "3.28"],
-	"uuid": "OverviewAllWindows@amiller27",
-	"name": "Overview All Windows",
-	"description": "Shows windows from all workspaces in the overview.",
-	"settings-schema": "org.gnome.shell.extensions.overview-all-windows",
-	"url": "http://github.com/amiller27/OverviewAllWindows"
+    "uuid": "OverviewAllWindows@amiller27",
+    "extension-id": "overview-all-windows",
+    "settings-schema": "org.gnome.shell.extensions.overview-all-windows",
+    "gettext-domain": "gnome-shell-extensions",
+    "name": "Overview All Windows",
+    "description": "Shows windows from all workspaces in the overview.",
+    "shell-version": ["3.22", "3.24", "3.26", "3.28"],
+    "url": "http://github.com/amiller27/OverviewAllWindows",
+    "original-authors": [ "amiller27" ]
 }

@@ -5,7 +5,7 @@
     "gettext-domain": "gnome-shell-extensions",
     "name": "Overview All Windows",
     "description": "Shows windows from all workspaces in the overview.",
-    "shell-version": ["3.22", "3.24", "3.26", "3.28"],
+    "shell-version": ["3.32"],
     "url": "http://github.com/amiller27/OverviewAllWindows",
     "original-authors": [ "amiller27" ]
 }

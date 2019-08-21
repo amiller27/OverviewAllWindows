@@ -6,6 +6,8 @@ const Overview = imports.ui.overview;
 const Tweener = imports.ui.tweener;
 const Workspace = imports.ui.workspace;
 
+const WindowPositionFlags = Workspace.WindowPositionFlags;
+
 var replacedFunctions = [
     '_isMyWindow',
     '_onCloneSelected',
@@ -49,28 +51,24 @@ var _doAddWindow = function(metaWin) {
 
     // We might have the window in our list already if it was on all workspaces and
     // now was moved to this workspace
-    if (this._lookupIndex (metaWin) != -1)
+    if (this._lookupIndex(metaWin) != -1)
         return;
 
     if (!this._isMyWindow(win))
         return;
 
     if (!this._isOverviewWindow(win)) {
-        if (metaWin.is_attached_dialog()) {
-            let parent = metaWin.get_transient_for();
-            while (parent.is_attached_dialog())
-                parent = metaWin.get_transient_for();
+        if (metaWin.get_transient_for() == null)
+            return;
 
-            let idx = this._lookupIndex (parent);
-            if (idx < 0) {
-                // parent was not created yet, it will take care
-                // of the dialog when created
-                return;
-            }
+        // Let the top-most ancestor handle all transients
+        let parent = metaWin.find_root_ancestor();
+        let clone = this._windows.find(c => c.metaWindow == parent);
 
-            let clone = this._windows[idx];
-            clone.addAttachedDialog(metaWin);
-        }
+        // If no clone was found, the parent hasn't been created yet
+        // and will take care of the dialog when added
+        if (clone)
+            clone.addDialog(metaWin);
 
         return;
     }
@@ -85,13 +83,14 @@ var _doAddWindow = function(metaWin) {
 
         clone.slot = [x, y, clone.actor.width * scale, clone.actor.height * scale];
         clone.positioned = true;
-        clone.actor.set_position (x, y);
-        clone.actor.set_scale (scale, scale);
+
+        clone.actor.set_position(x, y);
+        clone.actor.set_scale(scale, scale);
         clone.overlay.relayout(false);
     }
 
     this._currentLayout = null;
-    this._recalculateWindowPositions(Workspace.WindowPositionFlags.ANIMATE);
+    this._recalculateWindowPositions(WindowPositionFlags.ANIMATE);
 };
 
 var _updateWindowPositions = function(flags) {
@@ -100,12 +99,15 @@ var _updateWindowPositions = function(flags) {
         return;
     }
 
-    if (this.leavingOverview || this._animatingWindowsFade) {
+    // We will reposition windows anyway when enter again overview or when ending the windows
+    // animations whith fade animation.
+    // In this way we avoid unwanted animations of windows repositioning while
+    // animating overview.
+    if (this.leavingOverview || this._animatingWindowsFade)
         return;
-    }
 
-    let initialPositioning = flags & Workspace.WindowPositionFlags.INITIAL;
-    let animate = flags & Workspace.WindowPositionFlags.ANIMATE;
+    let initialPositioning = flags & WindowPositionFlags.INITIAL;
+    let animate = flags & WindowPositionFlags.ANIMATE;
 
     let layout = this._currentLayout;
     let strategy = layout.strategy;
@@ -114,13 +116,14 @@ var _updateWindowPositions = function(flags) {
     let area = Workspace.padArea(this._actualGeometry, padding);
     let slots = strategy.computeWindowSlots(layout, area);
 
-    let currentWorkspace = global.screen.get_active_workspace();
+    let workspaceManager = global.workspace_manager;
+    let currentWorkspace = workspaceManager.get_active_workspace();
+    let isOnCurrentWorkspace = this.metaWorkspace == null || this.metaWorkspace == currentWorkspace;
 
     for (let i = 0; i < slots.length; i++) {
         let slot = slots[i];
         let [x, y, scale, clone] = slot;
-        let metaWindow = clone.metaWindow;
-        let overlay = clone.overlay;
+
         clone.slotId = i;
 
         // Positioning a window currently being dragged must be avoided;
@@ -132,8 +135,14 @@ var _updateWindowPositions = function(flags) {
         let cloneHeight = clone.actor.height * scale;
         clone.slot = [x, y, cloneWidth, cloneHeight];
 
-        if (overlay && (initialPositioning || !clone.positioned))
-            overlay.hide();
+        let cloneCenter = x + cloneWidth / 2;
+        let maxChromeWidth = 2 * Math.min(
+            cloneCenter - area.x,
+            area.x + area.width - cloneCenter);
+        clone.overlay.setMaxChromeWidth(Math.round(maxChromeWidth));
+
+        if (clone.overlay && (initialPositioning || !clone.positioned))
+            clone.overlay.hide();
 
         if (!clone.positioned) {
             // This window appeared after the overview was already up
@@ -145,11 +154,11 @@ var _updateWindowPositions = function(flags) {
             clone.positioned = true;
         }
 
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+        // OverviewAllWorkspaces change: don't check isOnCurrentWorkspace
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
         if (animate) {
-            if (!metaWindow.showing_on_its_workspace() ||
-                metaWindow.get_workspace() != currentWorkspace ||
-                metaWindow.get_monitor() != this.monitorIndex) {
-
+            if (!clone.metaWindow.showing_on_its_workspace()) {
                 /* Hidden windows should fade in and grow
                  * therefore we need to resize them now so they
                  * can be scaled up later */
@@ -157,8 +166,8 @@ var _updateWindowPositions = function(flags) {
                     clone.actor.opacity = 0;
                     clone.actor.scale_x = 0;
                     clone.actor.scale_y = 0;
-                    clone.actor.x = x + cloneWidth / 2;
-                    clone.actor.y = y + cloneHeight / 2;
+                    clone.actor.x = x;
+                    clone.actor.y = y;
                 }
 
                 Tweener.addTween(clone.actor,
@@ -168,8 +177,7 @@ var _updateWindowPositions = function(flags) {
                                  });
             }
 
-            this._animateClone(clone, overlay, x, y, scale);
-
+            this._animateClone(clone, clone.overlay, x, y, scale);
         } else {
             // cancel any active tweens (otherwise they might override our changes)
             Tweener.removeTweens(clone.actor);
@@ -177,7 +185,7 @@ var _updateWindowPositions = function(flags) {
             clone.actor.set_scale(scale, scale);
             clone.actor.set_opacity(255);
             clone.overlay.relayout(false);
-            this._showWindowOverlay(clone, overlay);
+            this._showWindowOverlay(clone, clone.overlay);
         }
     }
 };
@@ -185,11 +193,7 @@ var _updateWindowPositions = function(flags) {
 var fadeToOverview = function() {
     // We don't want to reposition windows while animating in this way.
     this._animatingWindowsFade = true;
-
-    // this is the same _overviewShownId that is handled by the default Workspace class
-    // handling of the disconnection of this listener is left to the default behavior
-    this._overviewShownId = Main.overview.connect('shown', Lang.bind(this,
-                                                                     this._doneShowingOverview));
+    this._overviewShownId = Main.overview.connect('shown', this._doneShowingOverview.bind(this));
     if (this._windows.length == 0)
         return;
 
@@ -212,11 +216,7 @@ var fadeToOverview = function() {
 
 var fadeFromOverview = function() {
     this.leavingOverview = true;
-
-    // this is the same _overviewHiddenId that is handled by the default Workspace class
-    // handling of the disconnection of this listener is left to the default behavior
-    this._overviewHiddenId = Main.overview.connect('hidden', Lang.bind(this,
-                                                                       this._doneLeavingOverview));
+    this._overviewHiddenId = Main.overview.connect('hidden', this._doneLeavingOverview.bind(this));
     if (this._windows.length == 0)
         return;
 
@@ -249,7 +249,8 @@ var fadeFromOverview = function() {
 
 // Animates the return from Overview mode in Workspace.Workspace
 var zoomFromOverview = function() {
-    let currentWorkspace = global.screen.get_active_workspace();
+    let workspaceManager = global.workspace_manager;
+    let currentWorkspace = workspaceManager.get_active_workspace();
 
     this.leavingOverview = true;
 
@@ -262,8 +263,7 @@ var zoomFromOverview = function() {
         Mainloop.source_remove(this._repositionWindowsId);
         this._repositionWindowsId = 0;
     }
-    this._overviewHiddenId = Main.overview.connect('hidden', Lang.bind(this,
-                                                                       this._doneLeavingOverview));
+    this._overviewHiddenId = Main.overview.connect('hidden', this._doneLeavingOverview.bind(this));
 
     // Position and scale the windows.
     for (let i = 0; i < this._windows.length; i++) {

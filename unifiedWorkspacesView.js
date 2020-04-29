@@ -14,26 +14,20 @@ const WorkspacesView = imports.ui.workspacesView;
 
 const WORKSPACE_SWITCH_TIME = WorkspacesView.WORKSPACE_SWITCH_TIME;
 
-var UnifiedWorkspacesView = class extends WorkspacesView.WorkspacesViewBase {
-    constructor(monitorIndex) {
+var UnifiedWorkspacesView = GObject.registerClass(
+class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
+    _init(monitorIndex, scrollAdjustment) {
         let workspaceManager = global.workspace_manager;
 
-        super(monitorIndex);
+        super._init(monitorIndex);
 
         this._animating = false; // tweening
-        this._scrolling = false; // swipe-scrolling
         this._gestureActive = false; // touch(pad) gestures
-        this._animatingScroll = false; // programatically updating the adjustment
 
-        let activeWorkspaceIndex = workspaceManager.get_active_workspace_index();
-        this.scrollAdjustment = new St.Adjustment({ value: activeWorkspaceIndex,
-                                                    lower: 0,
-                                                    page_increment: 1,
-                                                    page_size: 1,
-                                                    step_increment: 0,
-                                                    upper: workspaceManager.n_workspaces });
-        this.scrollAdjustment.connect('notify::value',
-                                      this._onScroll.bind(this));
+        this._scrollAdjustment = scrollAdjustment;
+        this._onScrollId =
+            this._scrollAdjustment.connect('notify::value',
+                this._onScroll.bind(this));
 
         this._workspace = new Workspace.Workspace(null, this._monitorIndex);
         this.actor.add_actor(this._workspace.actor);
@@ -92,41 +86,51 @@ var UnifiedWorkspacesView = class extends WorkspacesView.WorkspacesViewBase {
         this._workspace.syncStacking(stackIndices);
     }
 
-    _scrollToActive() {
-        this._updateWorkspaceActors(true);
-    }
-
     // Update workspace actors parameters
     // @showAnimation: iff %true, transition between states
     _updateWorkspaceActors(showAnimation) {
+        let workspaceManager = global.workspace_manager;
         let active = global.screen.get_active_workspace_index();
 
         this._animating = showAnimation;
 
-        Tweener.removeTweens(this._workspace.actor);
+        this._workspace.remove_all_transitions();
+
+        let w = 0;
+
+        let params = {};
+        if (workspaceManager.layout_rows == -1)
+            params.y = (w - active) * this._fullGeometry.height;
+        else if (this.text_direction == Clutter.TextDirection.RTL)
+            params.x = (active - w) * this._fullGeometry.width;
+        else
+            params.x = (w - active) * this._fullGeometry.width;
 
         if (showAnimation) {
-            let params = { y: 0,
-                           time: WORKSPACE_SWITCH_TIME,
-                           transition: 'easeOutQuad',
-                           onComplete: () => {
-                               this._animating = false;
-                               this._updateVisibility();
-                           }
-                         };
-            this._updateVisibility();
-            Tweener.addTween(this._workspace.actor, params);
+            let easeParams = Object.assign(params, {
+                duration: WORKSPACE_SWITCH_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            });
+            // we have to call _updateVisibility() once before the
+            // animation and once afterwards - it does not really
+            // matter which tween we use, so we pick the first one ...
+            if (w == 0) {
+                this._updateVisibility();
+                easeParams.onComplete = () => {
+                    this._animating = false;
+                    this._updateVisibility();
+                };
+            }
+            workspace.ease(easeParams);
         } else {
-            this._workspace.actor.set_position(0, 0);
-            this._updateVisibility();
+            workspace.set(params);
+            if (w == 0)
+                this._updateVisibility();
         }
     }
 
     _updateVisibility() {
         this._workspace.actor.show();
-    }
-
-    _updateScrollAdjustment(index) {
     }
 
     _updateWorkspaces() {
@@ -136,23 +140,18 @@ var UnifiedWorkspacesView = class extends WorkspacesView.WorkspacesViewBase {
         if (this._scrolling)
             return;
 
-        this._scrollToActive();
+        this._updateWorkspaceActors(true);
     }
 
     _onDestroy() {
         super._onDestroy();
 
-        this.scrollAdjustment.run_dispose();
+        this.scrollAdjustment.disconnect(this._onScrollId);
         Main.overview.disconnect(this._overviewShownId);
         global.window_manager.disconnect(this._switchWorkspaceNotifyId);
         let workspaceManager = global.workspace_manager;
         workspaceManager.disconnect(this._updateWorkspacesId);
-    }
-
-    startSwipeScroll() {
-    }
-
-    endSwipeScroll() {
+        workspaceManager.disconnect(this._reorderWorkspacesId);
     }
 
     startTouchGesture() {
@@ -165,5 +164,4 @@ var UnifiedWorkspacesView = class extends WorkspacesView.WorkspacesViewBase {
     // and change the active workspace if appropriate
     _onScroll(adj) {
     }
-};
-Signals.addSignalMethods(UnifiedWorkspacesView.prototype);
+});

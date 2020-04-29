@@ -1,4 +1,5 @@
 const GLib = imports.gi.GLib;
+const Clutter = imports.gi.Clutter;
 const Lang = imports.lang;
 const Main = imports.ui.main;
 const Mainloop = imports.mainloop;
@@ -11,7 +12,6 @@ const WindowPositionFlags = Workspace.WindowPositionFlags;
 var replacedFunctions = [
     '_isMyWindow',
     '_onCloneSelected',
-    '_doAddWindow',
     '_updateWindowPositions',
     'fadeToOverview',
     'fadeFromOverview',
@@ -26,71 +26,6 @@ var _onCloneSelected = function(clone, time) {
     Main.activateWindow(clone.metaWindow,
                         time,
                         clone.metaWindow.get_workspace().index());
-};
-
-var _doAddWindow = function(metaWin) {
-    if (this.leavingOverview)
-        return;
-
-    let win = metaWin.get_compositor_private();
-
-    if (!win) {
-        // Newly-created windows are added to a workspace before
-        // the compositor finds out about them...
-        let id = Mainloop.idle_add(() => {
-            // only change: made this check monitor instead of workspace
-            if (this.actor &&
-                metaWin.get_compositor_private() &&
-                metaWin.get_monitor() == this.monitorIndex)
-                this._doAddWindow(metaWin);
-            return GLib.SOURCE_REMOVE;
-        });
-        GLib.Source.set_name_by_id(id, '[gnome-shell] this._doAddWindow');
-        return;
-    }
-
-    // We might have the window in our list already if it was on all workspaces and
-    // now was moved to this workspace
-    if (this._lookupIndex(metaWin) != -1)
-        return;
-
-    if (!this._isMyWindow(win))
-        return;
-
-    if (!this._isOverviewWindow(win)) {
-        if (metaWin.get_transient_for() == null)
-            return;
-
-        // Let the top-most ancestor handle all transients
-        let parent = metaWin.find_root_ancestor();
-        let clone = this._windows.find(c => c.metaWindow == parent);
-
-        // If no clone was found, the parent hasn't been created yet
-        // and will take care of the dialog when added
-        if (clone)
-            clone.addDialog(metaWin);
-
-        return;
-    }
-
-    let [clone, overlay] = this._addWindowClone(win, false);
-
-    if (win._overviewHint) {
-        let x = win._overviewHint.x - this.actor.x;
-        let y = win._overviewHint.y - this.actor.y;
-        let scale = win._overviewHint.scale;
-        delete win._overviewHint;
-
-        clone.slot = [x, y, clone.actor.width * scale, clone.actor.height * scale];
-        clone.positioned = true;
-
-        clone.actor.set_position(x, y);
-        clone.actor.set_scale(scale, scale);
-        clone.overlay.relayout(false);
-    }
-
-    this._currentLayout = null;
-    this._recalculateWindowPositions(WindowPositionFlags.ANIMATE);
 };
 
 var _updateWindowPositions = function(flags) {
@@ -131,8 +66,8 @@ var _updateWindowPositions = function(flags) {
         if (clone.inDrag)
             continue;
 
-        let cloneWidth = clone.actor.width * scale;
-        let cloneHeight = clone.actor.height * scale;
+        let cloneWidth = clone.width * scale;
+        let cloneHeight = clone.height * scale;
         clone.slot = [x, y, cloneWidth, cloneHeight];
 
         let cloneCenter = x + cloneWidth / 2;
@@ -144,13 +79,16 @@ var _updateWindowPositions = function(flags) {
         if (clone.overlay && (initialPositioning || !clone.positioned))
             clone.overlay.hide();
 
-        if (!clone.positioned) {
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+        // OverviewAllWorkspaces change: also grow windows on other workspaces
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+        if (!clone.positioned || clone.metaWindow.get_workspace() !== currentWorkspace) {
             // This window appeared after the overview was already up
             // Grow the clone from the center of the slot
-            clone.actor.x = x + cloneWidth / 2;
-            clone.actor.y = y + cloneHeight / 2;
-            clone.actor.scale_x = 0;
-            clone.actor.scale_y = 0;
+            clone.translation_x = x + cloneWidth / 2;
+            clone.translation_y = y + cloneHeight / 2;
+            clone.scale_x = 0;
+            clone.scale_y = 0;
             clone.positioned = true;
         }
 
@@ -163,27 +101,27 @@ var _updateWindowPositions = function(flags) {
                  * therefore we need to resize them now so they
                  * can be scaled up later */
                 if (initialPositioning) {
-                    clone.actor.opacity = 0;
-                    clone.actor.scale_x = 0;
-                    clone.actor.scale_y = 0;
-                    clone.actor.x = x;
-                    clone.actor.y = y;
+                    clone.opacity = 0;
+                    clone.scale_x = 0;
+                    clone.scale_y = 0;
+                    clone.translation_x = x;
+                    clone.translation_y = y;
                 }
 
-                Tweener.addTween(clone.actor,
-                                 { opacity: 255,
-                                   time: Overview.ANIMATION_TIME,
-                                   transition: 'easeInQuad'
-                                 });
+                clone.ease({
+                    opacity: 255,
+                    mode: Clutter.AnimationMode.EASE_IN_QUAD,
+                    duration: Overview.ANIMATION_TIME,
+                });
             }
 
             this._animateClone(clone, clone.overlay, x, y, scale);
         } else {
             // cancel any active tweens (otherwise they might override our changes)
-            Tweener.removeTweens(clone.actor);
-            clone.actor.set_position(x, y);
-            clone.actor.set_scale(scale, scale);
-            clone.actor.set_opacity(255);
+            clone.remove_all_transitions();
+            clone.set_translation(x, y, 0);
+            clone.set_scale(scale, scale);
+            clone.set_opacity(255);
             clone.overlay.relayout(false);
             this._showWindowOverlay(clone, clone.overlay);
         }
@@ -197,6 +135,12 @@ var fadeToOverview = function() {
     if (this._windows.length == 0)
         return;
 
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+    // OverviewAllWorkspaces changes:
+    // remove shortcircuits for windows we otherwise wouldn't animate
+    // remove topMaximizedWindow
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+
     let nTimeSlots = Math.min(Workspace.WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1, this._windows.length - 1);
     let windowBaseTime = Overview.ANIMATION_TIME / nTimeSlots;
 
@@ -209,7 +153,7 @@ var fadeToOverview = function() {
         else
             time = windowBaseTime;
 
-        this._windows[i].actor.opacity = 255;
+        this._windows[i].opacity = 255;
         this._fadeWindow(i, time, 0);
     }
 };
@@ -221,14 +165,19 @@ var fadeFromOverview = function() {
         return;
 
     for (let i = 0; i < this._windows.length; i++) {
-        let clone = this._windows[i];
-        Tweener.removeTweens(clone.actor);
+        this._windows[i].remove_all_transitions();
     }
 
     if (this._repositionWindowsId > 0) {
-        Mainloop.source_remove(this._repositionWindowsId);
+        GLib.source_remove(this._repositionWindowsId);
         this._repositionWindowsId = 0;
     }
+
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+    // OverviewAllWorkspaces changes:
+    // remove shortcircuits for windows we otherwise wouldn't animate
+    // remove topMaximizedWindow
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
 
     let nTimeSlots = Math.min(Workspace.WINDOW_ANIMATION_MAX_NUMBER_BLENDING + 1, this._windows.length - 1);
     let windowBaseTime = Overview.ANIMATION_TIME / nTimeSlots;
@@ -242,7 +191,7 @@ var fadeFromOverview = function() {
         else
             time = windowBaseTime * nTimeSlots;
 
-        this._windows[i].actor.opacity = 0;
+        this._windows[i].opacity = 0;
         this._fadeWindow(i, time, 255);
     }
 };
@@ -255,49 +204,58 @@ var zoomFromOverview = function() {
     this.leavingOverview = true;
 
     for (let i = 0; i < this._windows.length; i++) {
-        let clone = this._windows[i];
-        Tweener.removeTweens(clone.actor);
+        this._windows[i].remove_all_transitions();
     }
 
     if (this._repositionWindowsId > 0) {
-        Mainloop.source_remove(this._repositionWindowsId);
+        GLib.source_remove(this._repositionWindowsId);
         this._repositionWindowsId = 0;
     }
     this._overviewHiddenId = Main.overview.connect('hidden', this._doneLeavingOverview.bind(this));
 
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+    // OverviewAllWorkspaces changes: remove early return here
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+
     // Position and scale the windows.
     for (let i = 0; i < this._windows.length; i++) {
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+        // OverviewAllWorkspaces changes: inline loop here
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+
         let clone = this._windows[i];
         let overlay = this._windowOverlays[i];
 
         if (overlay)
             overlay.hide();
 
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+        // OverviewAllWorkspaces changes: extra conditions here
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!! //
+
         if (clone.metaWindow.showing_on_its_workspace() &&
             clone.metaWindow.get_workspace() === currentWorkspace &&
             clone.metaWindow.get_monitor() === this.monitorIndex) {
 
-            let origX, origY;
-            [origX, origY] = clone.getOriginalPosition();
-
-            Tweener.addTween(clone.actor,
-                             { x: origX,
-                               y: origY,
-                               scale_x: 1.0,
-                               scale_y: 1.0,
-                               time: Overview.ANIMATION_TIME,
-                               opacity: 255,
-                               transition: 'easeOutQuad'
-                             });
+            let [origX, origY] = clone.getOriginalPosition();
+            clone.ease({
+                translation_x: origX,
+                translation_y: origY,
+                scale_x: 1,
+                scale_y: 1,
+                opacity: 255,
+                duration: Overview.ANIMATION_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
         } else {
             // The window is hidden, make it shrink and fade it out
-            Tweener.addTween(clone.actor,
-                             { scale_x: 0,
-                               scale_y: 0,
-                               opacity: 0,
-                               time: Overview.ANIMATION_TIME,
-                               transition: 'easeOutQuad'
-                             });
+            clone.ease({
+                scale_x: 0,
+                scale_y: 0,
+                opacity: 0,
+                duration: Overview.ANIMATION_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
         }
     }
 };

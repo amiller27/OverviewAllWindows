@@ -3,20 +3,23 @@ const Workspace = imports.ui.workspace;
 const WorkspacesView = imports.ui.workspacesView;
 const Shell = imports.gi.Shell;
 const Meta = imports.gi.Meta;
+const ExtensionUtils = imports.misc.extensionUtils;
 
-let Me = imports.misc.extensionUtils.getCurrentExtension();
-const Convenience = Me.imports.convenience;
+const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Prefs = Me.imports.prefs;
 const UnifiedWorkspacesView = Me.imports.unifiedWorkspacesView;
-const UnifiedWorkspace = Me.imports.workspace;
 
-let originalFunctions, originalWorkspacesView;
+let originalWorkspacesView;
 let is_setup = false;
 let is_setting_up = false;
 let settings = 0;
 let _overviewHiddenId = 0;
+let last_setting = 0;
+let signals = [];
+let keybindings = [];
 
 function init() {
+    // log('OverviewAllWindows init');
 }
 
 function _addKeybinding(name, handler) {
@@ -45,9 +48,9 @@ function _removeKeybindings(name) {
     }
 }
 
-let last_setting = 0;
 function checkSettings() {
     let new_setting = settings.get_boolean(Prefs.SETTINGS_REPLACE_OVERVIEW);
+    // log('OverviewAllWindows checkSettings | new_setting: ' + new_setting);
     if (new_setting === last_setting) {
         return;
     }
@@ -64,16 +67,16 @@ function checkSettings() {
     }
 }
 
-let signals = [];
-let keybindings = [];
 function enable() {
-    settings = Convenience.getSettings();
-    signals.push(settings.connect('changed::' + Prefs.SETTINGS_REPLACE_OVERVIEW,
-                                  checkSettings));
+    // log('OverviewAllWindows enable');
+    settings = ExtensionUtils.getSettings();
+    signals.push(settings.connect('changed::' +
+            Prefs.SETTINGS_REPLACE_OVERVIEW, checkSettings));
     checkSettings();
 }
 
 function disable() {
+    // log('OverviewAllWindows disable');
     while (signals.length) {
         settings.disconnect(signals.pop());
     }
@@ -81,23 +84,15 @@ function disable() {
     while (keybindings.length) {
         _removeKeybindings(keybindings.pop());
     }
+    destroy();
 }
 
 function setUp() {
     if (is_setup||is_setting_up) return;
     is_setting_up = true;
-    originalFunctions = {};
 
-    for (let functionName of UnifiedWorkspace.replacedFunctions) {
-        originalFunctions[functionName] =
-            Workspace.Workspace.prototype[functionName];
-        Workspace.Workspace.prototype[functionName] =
-            UnifiedWorkspace[functionName];
-    }
-
-    originalWorkspacesView = WorkspacesView.WorkspacesView.prototype;
-    WorkspacesView.WorkspacesView.prototype =
-        UnifiedWorkspacesView.UnifiedWorkspacesView.prototype;
+    originalWorkspacesView = WorkspacesView.WorkspacesView;
+    WorkspacesView.WorkspacesView = UnifiedWorkspacesView.UnifiedWorkspacesView;
 
     Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
 
@@ -106,14 +101,11 @@ function setUp() {
 }
 
 function destroy() {
+    // log('OverviewAllWindows destroy');
     if (!is_setup||is_setting_up) return;
     is_setting_up = true;
-    for (let functionName in originalFunctions) {
-        Workspace.Workspace.prototype[functionName] =
-            originalFunctions[functionName];
-    }
 
-    WorkspacesView.WorkspacesView.prototype = originalWorkspacesView;
+    WorkspacesView.WorkspacesView = originalWorkspacesView;
     Main.overview.viewSelector._workspacesDisplay._updateWorkspacesViews();
 
     if (_overviewHiddenId != 0) {
@@ -123,7 +115,6 @@ function destroy() {
     is_setup = false;
     is_setting_up = false;
 }
-
 
 function toggleUnifiedOverview() {
     if (Main.overview.visible) {

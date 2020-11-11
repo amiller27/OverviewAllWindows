@@ -1,3 +1,4 @@
+'use strict';
 // -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*-
 
 //The following is my own version of WorkspacesView.WorkspacesView
@@ -5,14 +6,12 @@
 const { Clutter, GObject, Meta, Shell, St } = imports.gi;
 const Signals = imports.signals;
 
-// const Tweener = imports.ui.tweener;
 const Main = imports.ui.main;
 const Workspace = imports.ui.workspace;
 const WorkspacesView = imports.ui.workspacesView;
 const ExtensionUtils = imports.misc.extensionUtils;
 
 const Me = imports.misc.extensionUtils.getCurrentExtension();
-const UnifiedWorkspace = Me.imports.workspace;
 
 const WORKSPACE_SWITCH_TIME = WorkspacesView.WORKSPACE_SWITCH_TIME;
 
@@ -22,11 +21,6 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
         super._init(monitorIndex);
         
         let workspaceManager = global.workspace_manager;
-
-        for (let functionName of UnifiedWorkspace.replacedFunctions) {
-            this[functionName] =
-                UnifiedWorkspace[functionName];
-        }
 
         this._animating = false; // tweening
         this._gestureActive = false; // touch(pad) gestures

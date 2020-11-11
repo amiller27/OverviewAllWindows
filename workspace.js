@@ -1,11 +1,8 @@
-const GLib = imports.gi.GLib;
-const Clutter = imports.gi.Clutter;
-const Lang = imports.lang;
-const Main = imports.ui.main;
+'use strict';
+const { Clutter, GLib } = imports.gi;
 const Overview = imports.ui.overview;
+const Main = imports.ui.main;
 const Workspace = imports.ui.workspace;
-// const Mainloop = imports.mainloop;
-// const Tweener = imports.ui.tweener;
 
 const WindowPositionFlags = Workspace.WindowPositionFlags;
 

@@ -13,34 +13,18 @@ const ExtensionUtils = imports.misc.extensionUtils;
 
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 
-const WORKSPACE_SWITCH_TIME = WorkspacesView.WORKSPACE_SWITCH_TIME;
-
 var UnifiedWorkspacesView = GObject.registerClass(
 class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
     _init(monitorIndex, scrollAdjustment) {
         super._init(monitorIndex);
-        
-        let workspaceManager = global.workspace_manager;
 
+        let workspaceManager = global.workspace_manager;
         this._animating = false; // tweening
         this._gestureActive = false; // touch(pad) gestures
-
-        const { x, y, width, height } =
-            Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
-        this._fullGeometry = { x , y, width, height };
-
         this._scrollAdjustment = scrollAdjustment;
-        this._monitorIndex = monitorIndex;
-        this._onScrollId =
-            this._scrollAdjustment.connect('notify::value',
-                this._onScroll.bind(this));
 
         this._workspace = new Workspace.Workspace(null, this._monitorIndex);
         this.add_actor(this._workspace);
-        this._updateWorkspaces();
-        this._updateWorkspacesId =
-            workspaceManager.connect('notify::n-workspaces',
-                                     this._updateWorkspaces.bind(this));
 
         this._overviewShownId =
             Main.overview.connect('shown', () => {
@@ -52,9 +36,6 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
             global.window_manager.connect('switch-workspace',
                                           this._activeWorkspaceChanged.bind(this));
 
-        let settings = ExtensionUtils.getSettings('org.gnome.desktop.interface');
-        this.isAnimationsEnabled = settings.get_boolean('enable-animations');
-    
     }
 
     _setReservedSlot(window) {
@@ -85,26 +66,17 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
     animateFromOverview(animationType) {
         this.remove_clip();
 
-        let workspaceManager = global.workspace_manager;
-        let active = workspaceManager.get_active_workspace_index();
-        let isEmpty = workspaceManager.n_workspaces - 1 == active;
-        if (isEmpty) {
-            this._updateWorkspaceActors(true, 1, 0, true)
-        }
-        
         if (animationType == WorkspacesView.AnimationType.ZOOM) {
             this._workspace.zoomFromOverview();
         } else {
             this._workspace.fadeFromOverview();
         }
-        
-        }
+    }
 
     animateScroll(params) {
         this._updateVisibility();
-        this._workspace.remove_transition('value');
         this._workspace.ease(params, {
-            duration: WORKSPACE_SWITCH_TIME,
+            duration: WorkspacesView.WORKSPACE_SWITCH_TIME,
             mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
             onComplete: () => {
                 this._animating = false;
@@ -119,19 +91,18 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
 
     // Update workspace actors parameters
     // @showAnimation: iff %true, transition between states
-    _updateWorkspaceActors(showAnimation, from, to, hide = false) {
+    _updateWorkspaceActors(showAnimation, from, to) {
         this._animating = showAnimation;
-        let workspaceManager = global.workspace_manager;
+        const workspaceManager = global.workspace_manager;
         let params = {};
-            
-        let active = to - from;
-        (active > 0) ? active = 1 :  active = -1;
+        const active = to - from > 0 ? 1 : -1;
+
+        const isVertical = workspaceManager.layout_rows == -1;
+        this._workspace.remove_all_transitions();
 
         if (showAnimation) {
-
-            let isVertical = workspaceManager.layout_rows == -1;
-            this._workspace.remove_all_transitions();
-
+            const settings = ExtensionUtils.getSettings('org.gnome.desktop.interface');
+            const isAnimationsEnabled = settings.get_boolean('enable-animations');
             if (isVertical)
                 params.y = active * this._fullGeometry.height;
             else if (this.text_direction == Clutter.TextDirection.RTL)
@@ -140,25 +111,17 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
                 params.x = active * this._fullGeometry.width;
 
             if (isVertical) {
-                if (!hide) {
-                    this._workspace.set(params);
-                    params.y = 0;
-                }
-                if (this.isAnimationsEnabled) {
-                    this.animateScroll(params);
-                } else {
-                    this._workspace.set(params);
-                }
+                this._workspace.set(params);
+                params.y = 0;
             } else {
-                if (!hide) {
-                    this._workspace.set(params);
-                    params.x = 0;
-                }
-                if (this.isAnimationsEnabled) {
-                    this.animateScroll(params);
-                } else {
-                    this._workspace.set(params);
-                }
+                this._workspace.set(params);
+                params.x = 0;
+            }
+
+            if (isAnimationsEnabled) {
+                this.animateScroll(params);
+            } else {
+                this._workspace.set(params);
             }
         } else {
             this._updateVisibility();
@@ -172,27 +135,18 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
     _updateWorkspaces() {
     }
 
-    _activeWorkspaceChanged(wm, from, to, direction) {
+    _activeWorkspaceChanged(_wm, _from, _to, _direction) {
         if (this._scrolling)
             return;
 
-        this._updateWorkspaceActors(true, from, to);
+        this._updateWorkspaceActors(true, _from, _to);
     }
 
     _onDestroy() {
         super._onDestroy();
 
-        if (this._onScrollId)
-            this._scrollAdjustment.disconnect(this._onScrollId);
-        if (this._overviewShownId)
-            Main.overview.disconnect(this._overviewShownId);
-        if (this._switchWorkspaceNotifyId)
-            global.window_manager.disconnect(this._switchWorkspaceNotifyId);
-        let workspaceManager = global.workspace_manager;
-        if (this._updateWorkspacesId)
-            workspaceManager.disconnect(this._updateWorkspacesId);
-        if (this._reorderWorkspacesId)
-            workspaceManager.disconnect(this._reorderWorkspacesId);
+        Main.overview.disconnect(this._overviewShownId);
+        global.window_manager.disconnect(this._switchWorkspaceNotifyId);
     }
 
     startTouchGesture() {
@@ -203,6 +157,7 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
 
     // sync the workspaces' positions to the value of the scroll adjustment
     // and change the active workspace if appropriate
-    _onScroll(adj) {
+    _onScroll(_adj) {
     }
+
 });

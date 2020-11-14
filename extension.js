@@ -55,7 +55,7 @@ function _removeKeybindings(name) {
 function checkSettings() {
     let new_setting = settings.get_boolean(Prefs.SETTINGS_REPLACE_OVERVIEW);
     // log('OverviewAllWindows checkSettings | new_setting: ' + new_setting);
-    if (new_setting === last_setting) {
+    if (new_setting === last_setting && is_setup) {
         return;
     }
 
@@ -96,13 +96,14 @@ function disable() {
 }
 
 function setUp() {
-    if (is_setup||is_setting_up) return;
+    // log('OverviewAllWindows setUp | is_setup: ' + is_setup);
+    if (is_setup || is_setting_up) return;
     is_setting_up = true;
 
     for (let functionName of UnifiedWorkspace.replacedFunctions) {
         originalFunctions[functionName] =
-            Workspace.Workspace[functionName];
-        Workspace.Workspace[functionName] =
+            Workspace.Workspace.prototype[functionName];
+        Workspace.Workspace.prototype[functionName] =
             UnifiedWorkspace[functionName];
     }
 
@@ -116,16 +117,14 @@ function setUp() {
 }
 
 function destroy() {
-    // log('OverviewAllWindows destroy');
+    // log('OverviewAllWindows destroy | is_setup: ' + is_setup);
     if (!is_setup || is_setting_up) return;
     is_setting_up = true;
 
-    if (originalFunctions.length) {
-        for (let functionName in originalFunctions) {
-            Workspace.Workspace[functionName] =
-                originalFunctions[functionName];
-        }
-        originalFunctions = {};
+    for (let functionName in originalFunctions) {
+        Workspace.Workspace.prototype[functionName] =
+            originalFunctions[functionName];
+        delete originalFunctions[functionName];
     }
 
     if (originalWorkspacesView) {

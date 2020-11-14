@@ -1,12 +1,14 @@
+
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
 const GObject = imports.gi.GObject;
+
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const _ = imports.gettext.domain(Me.uuid).gettext;
 
-const Convenience = Me.imports.convenience;
+const ExtensionUtils = imports.misc.extensionUtils;
 
-const SETTINGS_REPLACE_OVERVIEW = 'replace-overview';
+var SETTINGS_REPLACE_OVERVIEW = 'replace-overview';
 
 function init() {
 }
@@ -19,7 +21,7 @@ const OverviewAllWindowsPrefsWidget = new GObject.Class({
     _init: function (params) {
         this.parent(params);
         this.margin = this.row_spacing = this.column_spacing = 10;
-        this._settings = Convenience.getSettings();
+        this._settings = ExtensionUtils.getSettings();
 
         let label = "Replace overview? (Otherwise keybinding is <Super><Ctl>tab)";
         let tooltip = "Do you want to replace the overview?";

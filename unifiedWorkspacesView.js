@@ -18,7 +18,6 @@ class UnifiedWorkspacesView extends WorkspacesView.WorkspacesViewBase {
     _init(monitorIndex, scrollAdjustment) {
         super._init(monitorIndex);
 
-        let workspaceManager = global.workspace_manager;
         this._animating = false; // tweening
         this._gestureActive = false; // touch(pad) gestures
         this._scrollAdjustment = scrollAdjustment;
